@@ -84,6 +84,7 @@ async function downloadSource(project: { source_type: string; source_url: string
   // subprocess with argument arrays so the user URL is never shell-interpreted.
   try {
     const downloaderArgs = ["--no-playlist", "--format", "bv*+ba/b", "--merge-output-format", "mp4"];
+    if (process.env.YTDLP_JS_RUNTIME) downloaderArgs.push("--js-runtimes", process.env.YTDLP_JS_RUNTIME);
     if (process.env.YTDLP_FORCE_IPV4 === "1") downloaderArgs.push("--force-ipv4");
     if (process.env.YTDLP_COOKIES_FILE) downloaderArgs.push("--cookies", process.env.YTDLP_COOKIES_FILE);
     if (process.env.YTDLP_COOKIES_FROM_BROWSER) downloaderArgs.push("--cookies-from-browser", process.env.YTDLP_COOKIES_FROM_BROWSER);

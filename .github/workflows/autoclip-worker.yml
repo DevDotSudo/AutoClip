@@ -17,6 +17,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Set up Deno for YouTube extraction
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Install media tools
         run: |
           sudo apt-get update
@@ -39,5 +44,6 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YTDLP_PATH: yt-dlp
+          YTDLP_JS_RUNTIME: deno
           FFMPEG_PATH: ffmpeg
           FFPROBE_PATH: ffprobe
