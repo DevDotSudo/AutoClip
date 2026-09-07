@@ -23,10 +23,10 @@ $env:TRANSCRIPTION_PROVIDER="gemini"
 npm run worker:dev
 ```
 
-The worker uses `GEMINI_API_KEY` to upload and analyze videos, then uses the configured `FFMPEG_PATH` to render clips. Direct video URLs work immediately; webpage URLs such as YouTube watch pages require `yt-dlp` on the worker host, configured with `YTDLP_PATH`. Downloaded URL sources are retained as private project source assets in R2 for future reprocessing. If YouTube returns HTTP 403, update yt-dlp and set `YTDLP_COOKIES_FROM_BROWSER=chrome` (or `firefox`/`edge`) while running the worker under the same Windows user as that browser, or provide a cookies file with `YTDLP_COOKIES_FILE`.
+The worker uses `GEMINI_API_KEY` to analyze uploaded videos stored in private R2, then uses the configured `FFMPEG_PATH` to render clips. New projects require an uploaded MP4, MOV, or WebM source; webpage URL ingestion is intentionally disabled so processing does not depend on YouTube downloaders or bot checks.
 
 Keep the service-role and R2 secret keys server-only. Configure R2 CORS to allow authenticated browser `PUT` uploads from the application origin, and never make the receipt prefix public.
 
-For a remote worker deployment, see [the Google Cloud VM guide](docs/hosting/google-cloud-worker.md). The included `Dockerfile.worker` installs FFmpeg and yt-dlp and keeps the processing process running independently from the web app.
+For a remote worker deployment, see [the Google Cloud VM guide](docs/hosting/google-cloud-worker.md). The included `Dockerfile.worker` installs FFmpeg and keeps the processing process running independently from the web app.
 
 For a no-billing demo using a public GitHub repository, the optional [GitHub Actions worker](docs/hosting/github-actions-worker.md) runs one queued job on a temporary hosted runner per workflow dispatch.

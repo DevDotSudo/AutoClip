@@ -1,20 +1,18 @@
 /**
  * Gemini video worker. Run this as a long-lived process with `npm run worker:dev`.
- * It claims durable Supabase jobs, sends private source videos to Gemini's Files
- * API, renders selected ranges with FFmpeg, and writes private clips back to R2.
+ * It claims durable Supabase jobs, downloads uploaded source videos from private R2,
+ * sends them to Gemini's Files API, renders selected ranges with FFmpeg, and writes
+ * private clips back to R2.
  */
 import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import { downloadObjectToFile, uploadFile, uploadObject } from "../lib/r2";
+import { downloadObjectToFile, uploadObject } from "../lib/r2";
 import { createFfmpegArgs } from "../server/render/ffmpeg";
 import { clipPotential, selectCandidates, type ClipCandidate } from "../server/analysis/clip-potential";
 import { analyzeVideoWithGemini, deleteGeminiFile, uploadVideoToGemini, waitForGeminiFile } from "../server/analysis/gemini-video";
@@ -41,20 +39,6 @@ async function setProject(id: string, values: Record<string, unknown>) {
   if (error) throw error;
 }
 
-async function retainSourceAsset(projectId: string, userId: string, filePath: string, mimeType: string) {
-  const sourceKey = `users/${userId}/sources/${projectId}.source`;
-  const { data: existing, error: lookupError } = await supabase.from("media_assets").select("id").eq("project_id", projectId).eq("asset_type", "SOURCE").maybeSingle();
-  if (lookupError) throw lookupError;
-  await uploadFile(sourceKey, filePath, mimeType);
-  const assetId = existing?.id || randomUUID();
-  const assetValues = { user_id: userId, project_id: projectId, asset_type: "SOURCE", r2_key: sourceKey, mime_type: mimeType, size_bytes: (await stat(filePath)).size, status: "READY" };
-  const { error: assetError } = existing
-    ? await supabase.from("media_assets").update({ ...assetValues, updated_at: new Date().toISOString() }).eq("id", assetId)
-    : await supabase.from("media_assets").insert({ id: assetId, ...assetValues });
-  if (assetError) throw assetError;
-  await setProject(projectId, { source_asset_id: assetId });
-}
-
 async function probeDuration(filePath: string) {
   const { stdout } = await execFileAsync(process.env.FFPROBE_PATH || "ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath], { maxBuffer: 1024 * 1024 });
   const seconds = Number.parseFloat(stdout.trim());
@@ -62,7 +46,7 @@ async function probeDuration(filePath: string) {
   return Math.round(seconds * 1000);
 }
 
-async function downloadSource(project: { source_type: string; source_url: string | null; source_asset_id: string | null }, filePath: string) {
+async function downloadSource(project: { source_asset_id: string | null }, filePath: string) {
   if (project.source_asset_id) {
     const { data: asset, error } = await supabase.from("media_assets").select("r2_key,mime_type,status").eq("id", project.source_asset_id).maybeSingle();
     if (error) throw error;
@@ -70,32 +54,7 @@ async function downloadSource(project: { source_type: string; source_url: string
     await downloadObjectToFile(asset.r2_key, filePath);
     return asset.mime_type || "video/mp4";
   }
-  if (!project.source_url) throw new Error("This project has no source video.");
-  if (!/^https?:\/\//i.test(project.source_url)) throw new Error("Only http(s) video URLs are supported.");
-  const response = await fetch(project.source_url);
-  const contentType = response.headers.get("content-type") || "";
-  if (response.ok && contentType.startsWith("video/")) {
-    if (!response.body) throw new Error("The direct video URL returned an empty response.");
-    await pipeline(Readable.fromWeb(response.body as never), createWriteStream(filePath));
-    return contentType.split(";")[0] || "video/mp4";
-  }
-
-  // Page URLs (including YouTube) need an external downloader. Keep this as a
-  // subprocess with argument arrays so the user URL is never shell-interpreted.
-  try {
-    const downloaderArgs = ["--no-playlist", "--format", "bv*+ba/b", "--merge-output-format", "mp4"];
-    if (process.env.YTDLP_JS_RUNTIME) downloaderArgs.push("--js-runtimes", process.env.YTDLP_JS_RUNTIME);
-    if (process.env.YTDLP_FORCE_IPV4 === "1") downloaderArgs.push("--force-ipv4");
-    if (process.env.YTDLP_COOKIES_FILE) downloaderArgs.push("--cookies", process.env.YTDLP_COOKIES_FILE);
-    if (process.env.YTDLP_COOKIES_FROM_BROWSER) downloaderArgs.push("--cookies-from-browser", process.env.YTDLP_COOKIES_FROM_BROWSER);
-    downloaderArgs.push("--output", filePath, project.source_url);
-    await execFileAsync(process.env.YTDLP_PATH || "yt-dlp", downloaderArgs, { maxBuffer: 10 * 1024 * 1024 });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") throw new Error("This URL is a webpage rather than a direct video. Install yt-dlp and set YTDLP_PATH, or upload the video file instead.");
-    throw new Error(`Video URL download failed: ${error instanceof Error ? error.message : "yt-dlp failed"}. If YouTube returned 403, update yt-dlp and configure YTDLP_COOKIES_FROM_BROWSER or YTDLP_COOKIES_FILE.`);
-  }
-  return "video/mp4";
+  throw new Error("This project does not have an uploaded source video.");
 }
 
 async function renderClip(input: string, output: string, candidate: ClipCandidate, resolution: "720p" | "1080p") {
@@ -109,13 +68,12 @@ async function processJob(job: Job) {
   try {
     await setProject(job.project_id, { status: "PROCESSING" });
     await setJob(job.id, { state: "RUNNING", stage: "INGEST", progress: 5, error_code: null, error_message: null });
-    const { data: project, error: projectError } = await supabase.from("projects").select("source_type,source_url,source_asset_id").eq("id", job.project_id).eq("user_id", job.user_id).single();
+    const { data: project, error: projectError } = await supabase.from("projects").select("source_asset_id").eq("id", job.project_id).eq("user_id", job.user_id).single();
     if (projectError) throw projectError;
     const sourcePath = path.join(workDir, "source");
     const mimeType = await downloadSource(project, sourcePath);
     const durationMs = await probeDuration(sourcePath);
     await setProject(job.project_id, { duration_ms: durationMs });
-    if (!project.source_asset_id) await retainSourceAsset(job.project_id, job.user_id, sourcePath, mimeType);
     await setJob(job.id, { stage: "TRANSCRIBE", progress: 15 });
 
     const uploaded = await uploadVideoToGemini(sourcePath, mimeType, `autoclip-${job.project_id}`);

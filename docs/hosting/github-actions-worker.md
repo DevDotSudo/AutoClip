@@ -14,6 +14,7 @@ In **Settings → Secrets and variables → Actions**, add:
 
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `GEMINI_API_KEY`.
 
+
 ## Application variables
 
 Set these server-side in the Next.js app (not in browser-exposed variables):
@@ -27,4 +28,4 @@ GITHUB_ACTIONS_REF=main
 
 The fine-grained token needs **Actions: Read and write** permission for the repository. When a project is created, the API dispatches the workflow. The workflow sets `WORKER_ONCE=1`, claims one queued job, and exits.
 
-GitHub-hosted runners do not have your browser cookies, so YouTube URLs that require an authenticated session may still fail. Use public/authorized sources or upload the source file directly to R2.
+The worker accepts uploaded MP4, MOV, and WebM sources stored in R2. It does not download webpage URLs; this avoids YouTube bot checks and keeps the workflow focused on Gemini and FFmpeg processing.

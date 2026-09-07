@@ -1,6 +1,6 @@
 # Hosted worker on Google Cloud Compute Engine
 
-This runs the AutoClip worker on a remote Linux VM. The web app can remain on its current host; the worker only needs outbound access to Supabase, R2, Gemini, and source URLs.
+This runs the AutoClip worker on a remote Linux VM. The web app can remain on its current host; the worker only needs outbound access to Supabase, R2, and Gemini.
 
 ## VM
 
@@ -22,11 +22,10 @@ git clone https://github.com/YOUR_ACCOUNT/AutoClip.git
 cd AutoClip
 ```
 
-Create `.env.local` on the VM with the server-only Supabase service-role key, R2 credentials, Gemini key, and:
+Create `.env.local` on the VM with the server-only Supabase service-role key, R2 credentials, and Gemini key:
 
 ```env
 TRANSCRIPTION_PROVIDER=gemini
-YTDLP_PATH=yt-dlp
 ```
 
 Never commit `.env.local` or copy it into the Docker image.
