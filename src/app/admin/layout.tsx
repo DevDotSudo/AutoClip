@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { requireAdmin } from "@/lib/billing/auth";
+export default async function AdminLayout({children}:{children:React.ReactNode}){await requireAdmin();return <div className="admin-root"><header className="admin-header"><Link href="/admin" className="brand"><span className="brand-mark">A</span><span>AutoClip Admin</span></Link><nav><Link href="/admin">Overview</Link><Link href="/admin/payments">Payments</Link><Link href="/admin/settings/payments">Payment methods</Link><Link href="/app/dashboard">Creator app</Link></nav></header><main className="admin-content">{children}</main></div>}

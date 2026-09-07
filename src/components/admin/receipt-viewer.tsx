@@ -1,0 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
+"use client";
+import { useEffect, useState } from "react";
+export function ReceiptViewer({id,hasReceipt}:{id:string;hasReceipt:boolean}){const[url,setUrl]=useState("");const[error,setError]=useState("");useEffect(()=>{if(!hasReceipt)return;fetch(`/api/payment-requests/${id}/receipt`).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.error);setUrl(body.url)}).catch(e=>setError(e instanceof Error?e.message:"Unable to load receipt."))},[id,hasReceipt]);if(!hasReceipt)return <div className="empty-state">No receipt uploaded.</div>;if(error)return <div className="form-error">{error}</div>;if(!url)return <div className="empty-state">Loading private receipt…</div>;return <a href={url} target="_blank" rel="noreferrer" className="receipt-link"><img src={url} alt="Customer payment receipt"/><span>Open full image ↗</span></a>}

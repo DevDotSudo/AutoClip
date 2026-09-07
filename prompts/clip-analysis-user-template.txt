@@ -1,0 +1,1 @@
+Analyze the transcript below and return up to {{MAX_CANDIDATES}} short-form clip candidates between {{MIN_SECONDS}} and {{MAX_SECONDS}} seconds. For each candidate return: start_ms, end_ms, title, opening_hook, reason, hook_score, clarity_score, payoff_score, emotion_score, novelty_score, clean_cut_score. Transcript: {{TRANSCRIPT}}

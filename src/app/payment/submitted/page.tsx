@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function PaymentSubmittedPage(){return <main className="payment-page"><div className="payment-card"><div className="payment-icon">✓</div><div className="section-kicker" style={{justifyContent:"center"}}>PROOF RECEIVED</div><h1>Pending review</h1><p>Your receipt was submitted securely. Your plan will activate only after an administrator verifies the payment.</p><Link href="/app/billing" className="btn btn-primary">Track payment →</Link></div></main>}

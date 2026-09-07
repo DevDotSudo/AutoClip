@@ -1,0 +1,7 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { inspectObject } from "@/lib/r2";
+const schema=z.object({assetId:z.string().uuid()});
+export async function POST(request:Request){try{const s=await createClient();const {data:{user}}=await s.auth.getUser();if(!user)return NextResponse.json({error:"Authentication required."},{status:401});const parsed=schema.safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:"Invalid asset."},{status:400});const admin=createAdminClient();const {data:asset}=await admin.from("media_assets").select("id,user_id,r2_key,size_bytes,status").eq("id",parsed.data.assetId).eq("user_id",user.id).maybeSingle();if(!asset)return NextResponse.json({error:"Asset not found."},{status:404});const head=await inspectObject(asset.r2_key);if(asset.size_bytes&&head.ContentLength&&Number(asset.size_bytes)!==Number(head.ContentLength))return NextResponse.json({error:"Uploaded file size did not match the expected size."},{status:400});await admin.from("media_assets").update({status:"READY",updated_at:new Date().toISOString()}).eq("id",asset.id);return NextResponse.json({ok:true,assetId:asset.id});}catch(e){console.error(e);return NextResponse.json({error:e instanceof Error?e.message:"Unable to verify upload."},{status:500})}}
